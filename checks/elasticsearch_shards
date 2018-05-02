@@ -1,0 +1,32 @@
+#!/usr/bin/python
+# -*- encoding: utf-8; py-indent-offset: 4 -*-
+
+# Fabian Binder - comNET GmbH - 2017-05-31
+
+def inventory_elasticsearch_shards(info):
+    return [ (None, None) ]
+
+def check_elasticsearch_shards(_no_item, params, info):
+    total, successful, failed = map(int, info[0])
+    state = 0
+    message = "%s total shards, %s allocated, %s failed" % (total, successful, failed)
+    if params:
+        warn, crit = params["failed"]
+        if type(warn) == float:
+            warn = int(round(warn / 100.0 * total))
+            crit = int(round(crit / 100.0 * total))
+        if failed >= crit:
+            state = 2
+        elif failed >= warn:
+            state = 1
+        message += " (warn/crit at %s/%s failed shards)" % (warn, crit)
+
+    return state, message
+
+check_info["elasticsearch_shards"]  = {
+    "check_function"     : check_elasticsearch_shards,
+    "inventory_function" : inventory_elasticsearch_shards,
+    "service_description": "Elasticsearch Shards",
+    "has_perfdata"       : True,
+    "group"              : "elasticsearch_shards",
+}

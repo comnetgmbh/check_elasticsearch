@@ -1,0 +1,143 @@
+#!/usr/bin/env python
+# -*- encoding: utf-8; py-indent-offset: 4 -*-
+
+# 2017-05-31, comNET GmbH, Fabian Binder - Initial version
+# 2017-10-20, comNET GmbH, Fabian Binder - Add averaging for all indices
+# 2017-10-25, comNET GmbH, Fabian Binder - Add cluster health and node health
+# 2017-11-13, comNET GmbH, Fabian Binder - Bugfix for elasticsearch not returning docs count
+# 2018-03-27, comNET GmbH, Fabian Binder - Refactored
+
+import requests
+import os, sys
+import argparse
+
+VERSION = '2018-03-27'
+
+#############################################################################
+
+parser = argparse.ArgumentParser(description='Check_MK elasticsearch Agent')
+parser.add_argument('hosts', metavar='hosts', nargs = '+',
+                    help='''Hostnames or IP addresses of the elasticsearch servers. If you
+                            query an elasticsearch cluster, the first host that returns
+                            elasticsearch data will be used.''')
+parser.add_argument('-P', '--port', dest='port', default = "9200",
+                    help='Use a non-standard port for connecting (standard is 9200)')
+parser.add_argument('-p', '--piggyback', dest='piggyback', default = None,
+                    help='Use this option to piggyback the agent output to another host')
+parser.add_argument('-i', '--modules', dest='modules', default = "health,nodestats,stats",
+                    help='''Comma-separated list of modules to query. Possible values:
+                              health
+                              nodestats
+                              stats
+                            By default, all available modules will be queried.''')
+args = parser.parse_args()
+
+# Prepare arguments
+
+if args.modules:
+    modules = args.modules.split(',')
+
+# Output general information about the agent
+
+sys.stdout.write('<<<check_mk>>>\n')
+sys.stdout.write('Version: %s\n' % VERSION)
+sys.stdout.write('AgentOS: linux\n')
+
+import time
+sys.stdout.write('<<<systemtime>>>\n')
+sys.stdout.write(time.strftime('%s\n'))
+
+# Build URL
+
+for host in args.hosts:
+
+    port = args.port
+
+    health_fields = "/_cluster/health?local=true"
+    health_url = 'http://' + host + ':' + port + health_fields
+
+    nodestats_fields = "/_nodes/_local/stats/process"
+    nodestats_url = 'http://' + host + ':' + port + nodestats_fields
+
+    stats_fields = "/_stats/store,docs"
+    stats_url = 'http://' + host + ':' + port + '/*-*' + stats_fields
+
+    # Retrieve data from host
+
+    os.environ['NO_PROXY'] = host
+
+    try:
+        # ------ Piggyback option ------
+
+        if args.piggyback:
+            print "<<<<%s>>>>" % args.piggyback
+
+        # ------ Receive cluster health status ------
+
+        if "health" in modules:
+            response = requests.get(health_url)
+            elasticsearch_health_response = response.json()
+
+            print "<<<elasticsearch_health:sep(59)>>>"
+            for item in elasticsearch_health_response:
+                print "%s;%s" % (item, elasticsearch_health_response[item])
+
+        # ------ Receive node stats ------
+
+        if "nodestats" in modules:
+            response = requests.get(nodestats_url)
+            elasticsearch_nodestats_response = response.json()
+
+            print "<<<elasticsearch_nodestats:sep(59)>>>"
+            for node in elasticsearch_nodestats_response["nodes"]:
+                node = elasticsearch_nodestats_response["nodes"][node]
+                node_name = node["name"]
+                print "%s;timestamp;%s" % (node_name, node["process"]["timestamp"])
+                print "%s;open_file_descriptors;%s" % (node_name, node["process"]["open_file_descriptors"])
+                print "%s;max_file_descriptors;%s" % (node_name, node["process"]["max_file_descriptors"])
+                print "%s;cpu_percent;%s" % (node_name, node["process"]["cpu"]["percent"])
+                print "%s;cpu_total_in_millis;%s" % (node_name, node["process"]["cpu"]["total_in_millis"])
+                print "%s;mem_total_virtual_in_bytes;%s" % (node_name, node["process"]["mem"]["total_virtual_in_bytes"])
+
+        # ------ Receive stats about shards, clusters and indices ------
+
+        if "stats" in modules:
+            response = requests.get(stats_url)
+            elasticsearch_stats_response = response.json()
+
+            print "<<<elasticsearch_shards:sep(59)>>>"
+            shards = elasticsearch_stats_response["_shards"]
+            print "%s;%s;%s" % (shards["total"], shards["successful"], shards["failed"])
+
+            print "<<<elasticsearch_cluster:sep(59)>>>"
+            if "docs" in elasticsearch_stats_response["_all"]["total"]:
+                count = elasticsearch_stats_response["_all"]["total"]["docs"]["count"]
+                size = elasticsearch_stats_response["_all"]["total"]["store"]["size_in_bytes"]
+                print "%s;%s" % (count, size)
+
+            print "<<<elasticsearch_indices:sep(59)>>>"
+            indices = set()
+            for i in elasticsearch_stats_response["indices"]:
+                name = i[:-11]
+                indices.add(name)
+            for indice in list(indices):
+                all_counts = []
+                all_sizes = []
+                for i in elasticsearch_stats_response["indices"]:
+                    name = i[:-11]
+                    if name == indice:
+                        all_counts.append(elasticsearch_stats_response["indices"][i]["total"]["docs"]["count"])
+                        all_sizes.append(elasticsearch_stats_response["indices"][i]["total"]["store"]["size_in_bytes"])
+                print "%s;%s;%s" % (indice, sum(all_counts)/len(all_counts), sum(all_sizes)/len(all_sizes))
+
+        # ------ Piggyback option ------
+
+        if args.piggyback:
+            print "<<<<>>>>"
+
+        # Exit if one of the cluster hosts returns data
+        exit(0)
+
+    # Try next cluster host if no data
+    except Exception, e:
+        pass

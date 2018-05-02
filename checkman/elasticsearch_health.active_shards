@@ -1,0 +1,19 @@
+title: Elasticsearch active shards
+agents: linux
+catalog: app/Elasticsearch
+license: GPL
+distribution: check_mk
+description:
+ This check uses the special agent for elasticsearch. The count of the active shards
+ and primary active shards will be checked.
+ If the count of the active shards is less than the double amount of the primary
+ active shards, it will go in WARN state.
+
+item:
+ No item
+
+inventory:
+ One service for the cluster
+
+perfdata:
+ Active shards, Active Primary Shards

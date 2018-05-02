@@ -1,0 +1,21 @@
+title: Document statistics for elasticsearch clusters
+agents: linux
+catalog: app/Elasticsearch
+license: GPL
+distribution: check_mk
+description:
+ This check uses the special agent for elasticsearch. The document count and
+ size growth per minute will be recorded and averaged for a set amount of time
+ (30 minutes by default). The last recent document count growth and size growth
+ will be compared to this average value. Thresholds can be set on how much higher
+ the last recent growth can be compared to the average growth.
+
+item:
+ No item
+
+inventory:
+ One service for the cluster
+
+perfdata:
+ Total size, total document count, growth within the last minute and average
+ growth per minute

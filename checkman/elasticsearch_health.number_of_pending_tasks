@@ -1,0 +1,21 @@
+title: Elasticsearch pending tasks
+agents: linux
+catalog: app/Elasticsearch
+license: GPL
+distribution: check_mk
+description:
+ This check uses the special agent for elasticsearch. The pending task count and
+ growth per minute will be recorded and averaged for a set amount of time
+ (30 minutes by default). The last recent pending task count growth
+ will be compared to this average value. Thresholds can be set on how much higher
+ the last recent growth can be compared to the average growth.
+
+item:
+ No item
+
+inventory:
+ One service for the cluster
+
+perfdata:
+ Total pending tasks, growth within the last minute and average
+ growth per minute

@@ -1,0 +1,59 @@
+#!/usr/bin/python
+# -*- encoding: utf-8; py-indent-offset: 4 -*-
+
+# Fabian Binder - comNET GmbH - 2017-11-07
+# Fabian Binder - comNET GmbH - 2018-03-27 - Refactored
+
+def inventory_elasticsearch_nodestats(info):
+    for nodename, statname, value in info:
+        title = "%s %s" % (nodename, statname)
+        if statname not in "cpu_percent":
+            yield title, None
+
+def check_elasticsearch_nodestats(item, params, info):
+    for nodename, statname, value in info:
+        title = "%s %s" % (nodename, statname)
+        if item == title:
+            return 0, value
+
+check_info["elasticsearch_nodestats"]  = {
+    "check_function"     : check_elasticsearch_nodestats,
+    "inventory_function" : inventory_elasticsearch_nodestats,
+    "service_description": "Elasticsearch nodestats",
+    "group"              : "elasticsearch_nodestats",
+}
+
+
+#   .--cpu-percent--------------------------------------------------.
+#   |     _____ _____  _    _   _____                        _      |
+#   |    / ____|  __ \| |  | | |  __ \                      | |     |
+#   |   | |    | |__) | |  | | | |__) |__ _ __ ___ ___ _ __ | |_    |
+#   |   | |    |  ___/| |  | | |  ___/ _ \ '__/ __/ _ \ '_ \| __|   |
+#   |   | |____| |    | |__| | | |  |  __/ | | (_|  __/ | | | |_    |
+#   |    \_____|_|     \____/  |_|   \___|_|  \___\___|_| |_|\__|   |
+#   |                                                               |
+#   '---------------------------------------------------------------'
+
+factory_settings["elasticsearch_nodestats_cpu"] = { "levels": (75.0, 90.0) }
+
+def inventory_elasticsearch_nodestats_cpu(info):
+    for nodename, statname, value in info:
+        if statname == "cpu_percent":
+            yield nodename, {}
+
+def check_elasticsearch_nodestats_cpu(item, params, info):
+    for nodename, statname, value in info:
+        if statname == "cpu_percent":
+            if nodename == item:
+                cpu_util = float(value)
+                return check_cpu_util(cpu_util, params)
+
+check_info['elasticsearch_nodestats.cpu_percent'] = {
+    "inventory_function"        : inventory_elasticsearch_nodestats_cpu,
+    "check_function"            : check_elasticsearch_nodestats_cpu,
+    "default_levels_variable"   : "elasticsearch_nodestats_cpu",
+    "service_description"       : "Elasticsearch CPU usage",
+    "has_perfdata"              : True,
+    "group"                     : "elasticsearch_cpu_usage",
+    "includes"                  : [ "cpu_util.include" ],
+}

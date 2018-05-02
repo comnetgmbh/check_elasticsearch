@@ -1,0 +1,29 @@
+#!/usr/bin/python
+# -*- encoding: utf-8; py-indent-offset: 4 -*-
+
+# 2017-10-25, comNET GmbH, Fabian Binder
+
+def agent_elasticsearch_arguments(params, hostname, ipaddress):
+
+    args = ''
+
+    if 'piggyback' in params:
+        args += ' -p ' + quote_shell_string(params['piggyback'])
+
+    if 'port' in params:
+        args += ' -P ' + str(params['port'])
+
+    if 'infos' in params:
+        args += " -i " + ",".join(params["infos"])
+
+    if 'hosts' in params and params['hosts'] != []:
+        for host in params['hosts']:
+            args += " " + quote_shell_string(host)
+    elif ipaddress:
+        args += " " + quote_shell_string(ipaddress)
+    else:
+        args += " " + quote_shell_string(hostname)
+
+    return args
+
+special_agent_info['elasticsearch'] = agent_elasticsearch_arguments

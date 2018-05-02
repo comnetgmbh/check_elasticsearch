@@ -1,0 +1,68 @@
+#!/usr/bin/python
+# -*- encoding: utf-8; py-indent-offset: 4 -*-
+
+# Fabian Binder - comNET GmbH - 2017-05-29
+# Fabian Binder - comNET GmbH - 2018-03-28 - Refactored
+
+def inventory_elasticsearch_cluster(info):
+    if len(info) > 0:
+        return [ (None, None) ]
+
+def check_elasticsearch_cluster(_no_item, params, info):
+    count = int(info[0][0])
+    size = int(info[0][1])
+
+    perfdata = []
+    status = 0
+
+    # Calculate rates for count and size
+
+    this_time = time.time()
+
+    docs_average = 30
+    size_average = 30
+
+    count_rate = get_rate("elasticsearch_cluster.count", this_time, count) * 60
+    size_rate = get_rate("elasticsearch_cluster.size", this_time, size) * 60
+
+    if params:
+        docs_warn, docs_crit, docs_average = params["docs_count_delta"]
+        size_warn, size_crit, size_average = params["size_delta"]
+
+    perfdata.append(("elasticsearch_count", count))
+    perfdata.append(("elasticsearch_size", size))
+
+    for what, value in [ ("count", count_rate), ("size", size_rate) ]:
+        perfdata.append(( "elasticsearch_%s_rate" % what, value))
+        if what == "count":
+            message = "%s docs (%.2f per minute)" % ('{:,}'.format(count), count_rate)
+            avg_rate = get_average("elasticsearch_cluster.%s.avg" % what, this_time, value, docs_average)
+            if params:
+                message += " (warn/crit: %.2f/%.2f)" % ((avg_rate * (docs_warn / 100 + 1)), (avg_rate * (docs_crit / 100 + 1)))
+                if count_rate > (avg_rate * (docs_crit / 100 + 1)):
+                    status = 2
+                elif count_rate > (avg_rate * (docs_warn / 100 + 1)):
+                    status = 1
+            yield status, message
+            perfdata.append(("elasticsearch_%s_avg" % what, avg_rate))
+        elif what == "size":
+            message = "size: %s (%s per minute)"% (get_bytes_human_readable(size), get_bytes_human_readable(size_rate))
+            avg_rate = get_average("elasticsearch_cluster.%s.avg" % what, this_time, value, size_average)
+            if params:
+                message += " (warn/crit: %s/%s)" % (get_bytes_human_readable((avg_rate * (size_warn / 100 + 1))), get_bytes_human_readable((avg_rate * (size_crit / 100 + 1))))
+                if size_rate > (avg_rate * (size_crit / 100 + 1)):
+                    status = 2
+                elif size_rate > (avg_rate * (size_warn / 100 + 1)):
+                    status = 1
+            yield status, message
+            perfdata.append(("elasticsearch_%s_avg" % what, avg_rate))
+
+    yield 0, None, perfdata
+
+check_info["elasticsearch_cluster"]  = {
+    "check_function"     : check_elasticsearch_cluster,
+    "inventory_function" : inventory_elasticsearch_cluster,
+    "service_description": "Elasticsearch cluster",
+    "has_perfdata"       : True,
+    "group"              : "elasticsearch_cluster",
+}

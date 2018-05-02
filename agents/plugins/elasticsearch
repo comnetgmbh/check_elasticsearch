@@ -1,0 +1,111 @@
+#!/usr/bin/python
+# -*- encoding: utf-8; py-indent-offset: 4 -*-
+
+# 2017-05-31, comNET GmbH, Fabian Binder - Initial version
+# 2017-10-20, comNET GmbH, Fabian Binder - Add averaging for all indices
+# 2017-10-25, comNET GmbH, Fabian Binder - Add cluster health and node health
+# 2017-11-10, comNET GmbH, Fabian Binder - Update for usage as agent plugin
+# 2017-11-13, comNET GmbH, Fabian Binder - Edit for agent bakery
+
+import requests
+import os, sys
+
+DEFAULT_SETTINGS = {
+    'host':    'localhost',
+    'port':    9200,
+    'modules': ['health', 'nodestats', 'stats'],
+}
+
+# Read config file
+
+settings = DEFAULT_SETTINGS
+cfg_path = os.path.join(os.getenv("MK_CONFDIR", "/etc/check_mk/"),
+                        "elasticsearch.cfg")
+dict_from_file = []
+try:
+    with open(cfg_path, 'r') as inf:
+        dict_from_file = eval(inf.read())
+
+    for item in settings:
+        settings[item] = dict_from_file[item]
+except:
+    pass
+
+modules = settings['modules']
+host = settings['host']
+port = str(settings['port'])
+
+# Build URL
+
+health_fields = "/_cluster/health?local=true"
+health_url = 'http://' + host + ':' + port + health_fields
+
+nodestats_fields = "/_nodes/_local/stats/process"
+nodestats_url = 'http://' + host + ':' + port + nodestats_fields
+
+stats_fields = "/_stats/store,docs"
+stats_url = 'http://' + host + ':' + port + '/*-*' + stats_fields
+
+# Retrieve data from host
+
+os.environ['NO_PROXY'] = host
+
+# ------ Receive cluster health status ------
+if "health" in modules:
+    response = requests.get(health_url)
+    elasticsearch_health_response = response.json()
+
+    print "<<<elasticsearch_health>>>"
+    for item in elasticsearch_health_response:
+        print "%s;%s" % (item, elasticsearch_health_response[item])
+
+# ------ Receive node stats ------
+
+if "nodestats" in modules:
+    response = requests.get(nodestats_url)
+    elasticsearch_nodestats_response = response.json()
+
+    print "<<<elasticsearch_nodestats>>>"
+    for node in elasticsearch_nodestats_response["nodes"]:
+        node = elasticsearch_nodestats_response["nodes"][node]
+        node_name = node["name"]
+        print "%s;timestamp;%s" % (node_name, node["process"]["timestamp"])
+        print "%s;open_file_descriptors;%s" % (node_name, node["process"]["open_file_descriptors"])
+        print "%s;max_file_descriptors;%s" % (node_name, node["process"]["max_file_descriptors"])
+        print "%s;cpu_percent;%s" % (node_name, node["process"]["cpu"]["percent"])
+        print "%s;cpu_total_in_millis;%s" % (node_name, node["process"]["cpu"]["total_in_millis"])
+        print "%s;mem_total_virtual_in_bytes;%s" % (node_name, node["process"]["mem"]["total_virtual_in_bytes"])
+
+# ------ Receive stats about shards, clusters and indices ------
+
+if "stats" in modules:
+    response = requests.get(stats_url)
+    elasticsearch_stats_response = response.json()
+
+    print "<<<elasticsearch_shards>>>"
+    shards_total = elasticsearch_stats_response["_shards"]["total"]
+    shards_success = elasticsearch_stats_response["_shards"]["successful"]
+    shards_failed = elasticsearch_stats_response["_shards"]["failed"]
+    print "%s;%s;%s" % (shards_total, shards_success, shards_failed)
+
+    print "<<<elasticsearch_cluster>>>"
+    if "docs" in elasticsearch_stats_response["_all"]["total"]:
+        count = elasticsearch_stats_response["_all"]["total"]["docs"]["count"]
+        size = elasticsearch_stats_response["_all"]["total"]["store"]["size_in_bytes"]
+        print "%s;%s" % (count, size)
+
+    print "<<<elasticsearch_indices>>>"
+    indices = set()
+    for i in elasticsearch_stats_response["indices"]:
+        name = i[:-11]
+        indices.add(name)
+    for indice in list(indices):
+        all_counts = []
+        all_sizes = []
+        for i in elasticsearch_stats_response["indices"]:
+            name = i[:-11]
+            if name == indice:
+                all_counts.append(elasticsearch_stats_response["indices"][i]["total"]["docs"]["count"])
+                all_sizes.append(elasticsearch_stats_response["indices"][i]["total"]["store"]["size_in_bytes"])
+        print "%s;%s;%s" % (indice, sum(all_counts)/len(all_counts), sum(all_sizes)/len(all_sizes))
+
