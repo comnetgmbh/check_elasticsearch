@@ -25,7 +25,9 @@
 # 2017-11-13, comNET GmbH, Fabian Binder - Bugfix for elasticsearch not returning docs count
 # 2018-03-27, comNET GmbH, Fabian Binder - Refactored
 # 2018-05-09, Lassi Kojo Oy, Lassi Kojo - Add support for SSL, custom CA and Basic auth
+# 2018-05-09, Lassi Kojo Oy, Lassi Kojo - Improve index date pattern handling
 
+import re
 import requests
 import os, sys
 import argparse
@@ -83,6 +85,9 @@ for host in args.hosts:
     username = args.username
     password = args.password
     ca = args.ca
+
+    index_date_pattern = "((-\d{4}(.|-){1}\d{2}(.|-){1}\d{2})|(-\d{4}(.|-){1}\d{2}))$"
+    date_expr = re.compile(index_date_pattern)
 
     health_fields = "/_cluster/health?local=true"
     health_url = proto + '://' + host + ':' + port + health_fields
@@ -173,13 +178,13 @@ for host in args.hosts:
             print "<<<elasticsearch_indices:sep(59)>>>"
             indices = set()
             for i in elasticsearch_stats_response["indices"]:
-                name = i[:-11]
+                name = re.sub(date_expr, '', i)
                 indices.add(name)
             for indice in list(indices):
                 all_counts = []
                 all_sizes = []
                 for i in elasticsearch_stats_response["indices"]:
-                    name = i[:-11]
+                    name = re.sub(date_expr, '', i)
                     if name == indice:
                         all_counts.append(elasticsearch_stats_response["indices"][i]["total"]["docs"]["count"])
                         all_sizes.append(elasticsearch_stats_response["indices"][i]["total"]["store"]["size_in_bytes"])

@@ -25,7 +25,9 @@
 # 2017-11-10, comNET GmbH, Fabian Binder - Update for usage as agent plugin
 # 2017-11-13, comNET GmbH, Fabian Binder - Edit for agent bakery
 # 2018-05-09, Lassi Kojo Oy, Lassi Kojo - Add support for SSL, custom CA and Basic auth
+# 2018-05-09, Lassi Kojo Oy, Lassi Kojo - Improve index date pattern handling
 
+import re
 import requests
 import os, sys
 
@@ -61,6 +63,9 @@ port = str(settings['port'])
 username = settings['username']
 password = settings['password']
 ca = settings['ca']
+
+index_date_pattern = "((-\d{4}(.|-){1}\d{2}(.|-){1}\d{2})|(-\d{4}(.|-){1}\d{2}))$"
+date_expr = re.compile(index_date_pattern)
 
 # Build URL
 
@@ -148,13 +153,13 @@ if "stats" in modules:
     print "<<<elasticsearch_indices>>>"
     indices = set()
     for i in elasticsearch_stats_response["indices"]:
-        name = i[:-11]
+        name = re.sub(date_expr, '', i)
         indices.add(name)
     for indice in list(indices):
         all_counts = []
         all_sizes = []
         for i in elasticsearch_stats_response["indices"]:
-            name = i[:-11]
+            name = re.sub(date_expr, '', i)
             if name == indice:
                 all_counts.append(elasticsearch_stats_response["indices"][i]["total"]["docs"]["count"])
                 all_sizes.append(elasticsearch_stats_response["indices"][i]["total"]["store"]["size_in_bytes"])
