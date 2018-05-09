@@ -4,17 +4,17 @@
 # Copyright (C) 2017 comNET GmbH
 #
 # This file is part of check_elasticsearch.
-# 
+#
 # check_elasticsearch is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
-# 
+#
 # Foobar is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
-# 
+#
 # You should have received a copy of the GNU General Public License
 # along with check_elasticsearch.  If not, see <http://www.gnu.org/licenses/>.
 
@@ -24,14 +24,19 @@
 # 2017-10-25, comNET GmbH, Fabian Binder - Add cluster health and node health
 # 2017-11-10, comNET GmbH, Fabian Binder - Update for usage as agent plugin
 # 2017-11-13, comNET GmbH, Fabian Binder - Edit for agent bakery
+# 2018-05-09, Lassi Kojo Oy, Lassi Kojo - Add support for SSL, custom CA and Basic auth
 
 import requests
 import os, sys
 
 DEFAULT_SETTINGS = {
+    'proto':   'http',
     'host':    'localhost',
     'port':    9200,
     'modules': ['health', 'nodestats', 'stats'],
+    'username': None,
+    'password': None,
+    'ca': None,
 }
 
 # Read config file
@@ -44,25 +49,29 @@ try:
     with open(cfg_path, 'r') as inf:
         dict_from_file = eval(inf.read())
 
-    for item in settings:
+    for item in dict_from_file:
         settings[item] = dict_from_file[item]
 except:
     pass
 
 modules = settings['modules']
+proto = settings['proto']
 host = settings['host']
 port = str(settings['port'])
+username = settings['username']
+password = settings['password']
+ca = settings['ca']
 
 # Build URL
 
 health_fields = "/_cluster/health?local=true"
-health_url = 'http://' + host + ':' + port + health_fields
+health_url = proto + '://' + host + ':' + port + health_fields
 
 nodestats_fields = "/_nodes/_local/stats/process"
-nodestats_url = 'http://' + host + ':' + port + nodestats_fields
+nodestats_url = proto + '://' + host + ':' + port + nodestats_fields
 
 stats_fields = "/_stats/store,docs"
-stats_url = 'http://' + host + ':' + port + '/*-*' + stats_fields
+stats_url = proto + '://' + host + ':' + port + '/*-*' + stats_fields
 
 # Retrieve data from host
 
@@ -70,7 +79,15 @@ os.environ['NO_PROXY'] = host
 
 # ------ Receive cluster health status ------
 if "health" in modules:
-    response = requests.get(health_url)
+    if username and password:
+        if ca:
+            response = requests.get(health_url, verify=ca, auth=(username, password))
+        else:
+            response = requests.get(health_url, auth=(username, password))
+    elif ca:
+        response = requests.get(health_url, verify=ca)
+    else:
+        response = requests.get(health_url)
     elasticsearch_health_response = response.json()
 
     print "<<<elasticsearch_health>>>"
@@ -80,7 +97,15 @@ if "health" in modules:
 # ------ Receive node stats ------
 
 if "nodestats" in modules:
-    response = requests.get(nodestats_url)
+    if username and password:
+        if ca:
+            response = requests.get(nodestats_url, verify=ca, auth=(username, password))
+        else:
+            response = requests.get(nodestats_url, auth=(username, password))
+    elif ca:
+        response = requests.get(nodestats_url, verify=ca)
+    else:
+        response = requests.get(nodestats_url)
     elasticsearch_nodestats_response = response.json()
 
     print "<<<elasticsearch_nodestats>>>"
@@ -97,7 +122,15 @@ if "nodestats" in modules:
 # ------ Receive stats about shards, clusters and indices ------
 
 if "stats" in modules:
-    response = requests.get(stats_url)
+    if username and password:
+        if ca:
+            response = requests.get(stats_url, verify=ca, auth=(username, password))
+        else:
+            response = requests.get(stats_url, auth=(username, password))
+    elif ca:
+        response = requests.get(stats_url, verify=ca)
+    else:
+        response = requests.get(stats_url)
     elasticsearch_stats_response = response.json()
 
     print "<<<elasticsearch_shards>>>"
@@ -126,4 +159,3 @@ if "stats" in modules:
                 all_counts.append(elasticsearch_stats_response["indices"][i]["total"]["docs"]["count"])
                 all_sizes.append(elasticsearch_stats_response["indices"][i]["total"]["store"]["size_in_bytes"])
         print "%s;%s;%s" % (indice, sum(all_counts)/len(all_counts), sum(all_sizes)/len(all_sizes))
-
