@@ -95,7 +95,7 @@ if "health" in modules:
         response = requests.get(health_url)
     elasticsearch_health_response = response.json()
 
-    print "<<<elasticsearch_health>>>"
+    print "<<<elasticsearch_health:sep(59)>>>"
     for item in elasticsearch_health_response:
         print "%s;%s" % (item, elasticsearch_health_response[item])
 
@@ -113,7 +113,7 @@ if "nodestats" in modules:
         response = requests.get(nodestats_url)
     elasticsearch_nodestats_response = response.json()
 
-    print "<<<elasticsearch_nodestats>>>"
+    print "<<<elasticsearch_nodestats:sep(59)>>>"
     for node in elasticsearch_nodestats_response["nodes"]:
         node = elasticsearch_nodestats_response["nodes"][node]
         node_name = node["name"]
@@ -138,19 +138,19 @@ if "stats" in modules:
         response = requests.get(stats_url)
     elasticsearch_stats_response = response.json()
 
-    print "<<<elasticsearch_shards>>>"
+    print "<<<elasticsearch_shards:sep(59)>>>"
     shards_total = elasticsearch_stats_response["_shards"]["total"]
     shards_success = elasticsearch_stats_response["_shards"]["successful"]
     shards_failed = elasticsearch_stats_response["_shards"]["failed"]
     print "%s;%s;%s" % (shards_total, shards_success, shards_failed)
 
-    print "<<<elasticsearch_cluster>>>"
+    print "<<<elasticsearch_cluster:sep(59)>>>"
     if "docs" in elasticsearch_stats_response["_all"]["total"]:
         count = elasticsearch_stats_response["_all"]["total"]["docs"]["count"]
         size = elasticsearch_stats_response["_all"]["total"]["store"]["size_in_bytes"]
         print "%s;%s" % (count, size)
 
-    print "<<<elasticsearch_indices>>>"
+    print "<<<elasticsearch_indices:sep(59)>>>"
     indices = set()
     for i in elasticsearch_stats_response["indices"]:
         name = re.sub(date_expr, '', i)
